@@ -13,6 +13,9 @@ celery.add_defaults(dict(CELERY_ACCEPT_CONTENT = ['pickle'],
                          CELERY_ENABLE_UTC = True))
 celery.config_from_envvar('DISTPATCH_CELERY_CONFIG')
 
+if 'DISTPATCH_DIST_DIR' in celery.conf:
+    os.environ['DISTDIR'] = celery.conf['DISTPATCH_DIST_DIR']
+
 
 @celery.task
 def diff(package):
@@ -22,11 +25,11 @@ def diff(package):
 
     print '[package] %s' % package
 
-    db_dir = celery.conf.get('DISTPATCH_DELTADB_DIR', '/tmp/deltadb')
-    db_file = os.path.join(db_dir, '%s.db' % package)
+    output_dir = celery.conf.get('DISTPATCH_OUTPUT_DIR', '/tmp/deltas')
+    db_file = os.path.join(output_dir, 'delta.db')
 
-    if not os.path.isdir(db_dir):
-        os.makedirs(db_dir, 0755)
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir, 0755)
 
     db = DeltaDB(db_file)
 
@@ -41,15 +44,13 @@ def diff(package):
     for diff in pkg.diffs:
         print '[diff] %s %r' % (package, diff)
         try:
-            diff.generate(celery.conf.get('DISTPATCH_OUTPUT_DIR',
-                                          '/tmp/distpatch'),
-                          True, True, False)
+            diff.generate(output_dir, True, True, False)
         except DiffExists:
             print '[diff: exists] %s %r' % (package, diff)
         else:
             print '[diff: generated] %s %r' % (package, diff)
             db.add(diff.dbrecord)
-            print '[diff: added to delta] %s %r' % (package, diff)
+            print '[diff: added to db] %s %r' % (package, diff)
         diff.cleanup()
         print '[diff: done] %s %r' % (package, diff)
 
